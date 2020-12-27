@@ -41,9 +41,14 @@ const uint8_t LTOCM_REQUEST_STANDARD[]		= { 0x45 };
 /// LTO-CM REQUEST SERIAL NUMBER: returns 5 byte serial number
 const uint8_t LTOCM_REQUEST_SERIAL_NUM[]	= { 0x93, 0x20 };
 
-/// LTO-CM SELECT: no response bytes. Zeroes are 5 serial number bytes plus 2-byte checksum.
+/// LTO-CM SELECT: zeroes are 5 serial number bytes plus 2-byte checksum. Responds with ACK.
 const uint8_t LTOCM_SELECT[]				= { 0x93, 0x70, 0, 0, 0, 0, 0, 0, 0 };
 
+/// LTO-CM READ BLOCK: zeroes are block address and 2-byte checksum.
+const uint8_t LTOCM_READ_BLOCK[]			= { 0x30, 0, 0, 0 };
+
+/// LTO-CM READ BLOCK CONTINUE
+const uint8_t LTOCM_READ_BLOCK_CONTINUE[]	= { 0x80 };
 
 /***
  * Utility functions
@@ -219,7 +224,43 @@ int main(void)
 
 
 	// Chip is now in the LTO-CM COMMAND state, we should be able to read it
-	
+
+	// Read all blocks in the chip
+	printf("Reading LTO-CM data to file\n");
+
+	FILE *fp = fopen("cartdata.ltocm", "wb");
+	uint8_t readBlockCmd[4] = { 0x30, 0, 0, 0 };
+	uint8_t blockBuf[32];
+	for (size_t block = 0; block < 255; block++) {
+		readBlockCmd[1] = block;
+		iso14443a_crc_append(readBlockCmd, 2);
+
+		if (!transmit_bytes(readBlockCmd, sizeof(readBlockCmd))) {
+			printf("Error: error with READ BLOCK command, block=%zu\n", block);
+			returncode = EXIT_FAILURE;
+			goto err_exit;
+		}
+
+		// TODO Check we got 16 bytes + CRC back
+		// TODO Check CRC
+
+		memcpy(blockBuf, abtRx, 16);
+
+		if (!transmit_bytes(LTOCM_READ_BLOCK_CONTINUE, sizeof(LTOCM_READ_BLOCK_CONTINUE))) {
+			printf("Error: error with READ BLOCK CONTINUE command, block=%zu\n", block);
+			returncode = EXIT_FAILURE;
+			goto err_exit;
+		}
+
+		// TODO Check we got 16 bytes + CRC back
+		// TODO Check CRC
+
+		memcpy(&blockBuf[16], abtRx, 16);
+
+		fwrite(blockBuf, 1, sizeof(blockBuf), fp);
+	}
+
+	fclose(fp);
 
 
 err_exit:
