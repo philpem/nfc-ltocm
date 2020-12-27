@@ -14,6 +14,8 @@ Author: Phil Pemberton <philpem@philpem.me.uk>
 
 This code is based on the `libnfc-mfsetuid` example included with [libnfc](https://github.com/nfc-tools/libnfc/).
 
+LTO-CM is specified in Annex F of [ECMA-319](https://www.ecma-international.org/publications/files/ECMA-ST/ECMA-319.pdf)
+
 
 ## Licence
 
