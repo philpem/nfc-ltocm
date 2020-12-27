@@ -181,8 +181,38 @@ int main(void)
 	printf("LTO REQUEST STANDARD: %02X %02X\n", abtRx[0], abtRx[1]);
 	memcpy(ltoStandard, abtRx, 2);
 
-	// TODO Validate LTO-CM REQUEST STANDARD response
-	// (our chip says 00,02)
+	size_t numLTOCMBlocks = 0;
+
+	/* According to the Proxmark 3 LTO-CM code (client/src/cmdhflto.c), the
+	 * memory sizes are:
+	 *   LTO type info 00,01: 101 blocks  -- wrong, 127
+	 *   LTO type info 00,02:  95 blocks  -- wrong, 255
+	 *   LTO type info 00,03: 255 blocks
+	 *
+	 * This seems to be incorrect. The LTO chip size is stored in Block 0.
+	 * See ECMA-319 Annex D, D.2.1 "LTO-CM Manufacturer's Information"
+	 *
+	 * I have a type=2 chip (on a Sony LTO4 cartridge from 2015) which declares
+	 * 8*1024 bytes capacity in Block 0, and has 255 readable blocks.
+	 *
+	 * A HP cleaning catridge with memory type=1 declares 4*1024 bytes capacity
+	 * and has 127 readable blocks.
+	 */
+
+	// Validate LTO-CM REQUEST STANDARD response
+	uint16_t ltoCMStandard = ((uint16_t)abtRx[0] << 8) | ((uint16_t)abtRx[1]);
+	switch (ltoCMStandard) {
+		case 0x0001:
+			numLTOCMBlocks = 127;
+			break;
+		case 0x0002:
+			numLTOCMBlocks = 255;
+			break;
+		default:
+			printf("Error: unknown LTO-CM memory type %04X\n", ltoCMStandard);
+			returncode = EXIT_FAILURE;
+			goto err_exit;
+	}
 
 
 	// Send LTO-CM REQUEST SERIAL NUMBER
@@ -225,18 +255,19 @@ int main(void)
 
 	// Chip is now in the LTO-CM COMMAND state, we should be able to read it
 
+
 	// Read all blocks in the chip
 	printf("Reading LTO-CM data to file\n");
 
 	FILE *fp = fopen("cartdata.ltocm", "wb");
 	uint8_t readBlockCmd[4] = { 0x30, 0, 0, 0 };
 	uint8_t blockBuf[32];
-	for (size_t block = 0; block < 255; block++) {
+	for (size_t block = 0; block < numLTOCMBlocks; block++) {
 		readBlockCmd[1] = block;
 		iso14443a_crc_append(readBlockCmd, 2);
 
 		if (!transmit_bytes(readBlockCmd, sizeof(readBlockCmd))) {
-			printf("Error: error with READ BLOCK command, block=%zu\n", block);
+			printf("Error: error with READ BLOCK command, block=%zu of %zu\n", block, numLTOCMBlocks);
 			returncode = EXIT_FAILURE;
 			goto err_exit;
 		}
