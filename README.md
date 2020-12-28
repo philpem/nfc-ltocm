@@ -11,11 +11,20 @@ Author: Phil Pemberton <philpem@philpem.me.uk>
   - Enjoy.
 
 
+## Limitations
+
+To reduce the potential for abuse by unscrupulous dealers of "refurbished" media, `nfc-ltocm` can only read from the LTO-CM chip. Write support is not present, nor is it likely to be added.
+
+LTO-CM memories of type 3 are not supported, due to a lack of tapes to test with.
+
+LTO-CM memories of type 4 or later are not supported, as these are not specified in ECMA-319. If you have a datasheet or specification for a later revision of LTO-CM memory chip, please contact me on the email address above. If you've successfully added Type 3 or later memory device support, please open a PR.
+
+
 ## Credits
 
 This code is based on the `libnfc-mfsetuid` example included with [libnfc](https://github.com/nfc-tools/libnfc/).
 
-LTO-CM is specified in Annex F of [ECMA-319](https://www.ecma-international.org/publications/files/ECMA-ST/ECMA-319.pdf)
+LTO-CM is specified in Annexes D and F of [ECMA-319](https://www.ecma-international.org/publications/files/ECMA-ST/ECMA-319.pdf)
 
 
 ## Licence
