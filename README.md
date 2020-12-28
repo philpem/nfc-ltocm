@@ -11,6 +11,15 @@ Author: Phil Pemberton <philpem@philpem.me.uk>
   - Enjoy.
 
 
+## Hints on antenna/LTO placement
+
+The ACR122U (Touchatag) reader can read LTO-CM chips quite reliably, if slowly. Place the LTO-CM chip over the centre of the Touchatag (or NFC) logo.
+
+The SCL3711 also works, but antenna placement is more critical. Place the tape flat down, with the rear-right corner over the NFC reader's antenna. Support the front-left corner to stop the tape from slipping.
+
+The LTO-CM chip is located at the back of the cartridge, behind the right side of the label. This is on the opposite side of the label from the write protect tab.
+
+
 ## Limitations
 
 To reduce the potential for abuse by unscrupulous dealers of "refurbished" media, `nfc-ltocm` can only read from the LTO-CM chip. Write support is not present, nor is it likely to be added.
