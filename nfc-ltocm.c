@@ -5,7 +5,7 @@
  * github.com/philpem
  * www.philpem.me.uk
  *
- * MIT licenced.
+ * Licence: 2-clause BSD, see README.md
  *
  * References:
  *   ECMA-319: https://www.ecma-international.org/publications/files/ECMA-ST/ECMA-319.pdf
@@ -22,15 +22,21 @@
 #include "nfc-utils.h"
 
 
-
-const bool quiet_output = false;
+/// Set to 'false' for more debugging (print raw packets)
+const bool quiet_output = true;
 
 #define MAX_FRAME_LEN 264
 
+/// Receive buffer
 static uint8_t abtRx[MAX_FRAME_LEN];
+/// Number of received bits
 static int szRxBits;
+/// Number of received bytes
 static int szRxBytes;
+
+/// NFC device handle
 static nfc_device *pnd;
+
 
 /***
  * LTO-CM commands
