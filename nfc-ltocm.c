@@ -50,6 +50,13 @@ const uint8_t LTOCM_READ_BLOCK[]			= { 0x30, 0, 0, 0 };
 /// LTO-CM READ BLOCK CONTINUE
 const uint8_t LTOCM_READ_BLOCK_CONTINUE[]	= { 0x80 };
 
+/// ACK response
+const uint8_t LTOCM_ACK = 0x0A;
+
+/// NACK response
+const uint8_t LTOCM_NACK = 0x05;
+
+
 /***
  * Utility functions
  ***/
@@ -267,12 +274,21 @@ int main(void)
 		iso14443a_crc_append(readBlockCmd, 2);
 
 		if (!transmit_bytes(readBlockCmd, sizeof(readBlockCmd))) {
-			printf("Error: error with READ BLOCK command, block=%zu of %zu\n", block, numLTOCMBlocks);
+			printf("Error: error with READ BLOCK command, block=%zu of %zu\n", block, numLTOCMBlocks-1);
 			returncode = EXIT_FAILURE;
 			goto err_exit;
 		}
 
-		// TODO Check we got 16 bytes + CRC back
+		if ((szRxBytes == 1) && (abtRx[0] == LTOCM_NACK)) {
+			printf("Error: READ BLOCK %zu (of %zu) failed, NACK\n", block, numLTOCMBlocks-1);
+			returncode = EXIT_FAILURE;
+			goto err_exit;
+		} else if (szRxBytes != 18) {
+			printf("Error: READ BLOCK %zu (of %zu) failed, insufficient response bytes\n", block, numLTOCMBlocks-1);
+			returncode = EXIT_FAILURE;
+			goto err_exit;
+		}
+
 		// TODO Check CRC
 
 		memcpy(blockBuf, abtRx, 16);
@@ -283,7 +299,16 @@ int main(void)
 			goto err_exit;
 		}
 
-		// TODO Check we got 16 bytes + CRC back
+		if ((szRxBytes == 1) && (abtRx[0] == LTOCM_NACK)) {
+			printf("Error: READ BLOCK %zu (of %zu) failed, NACK\n", block, numLTOCMBlocks-1);
+			returncode = EXIT_FAILURE;
+			goto err_exit;
+		} else if (szRxBytes != 18) {
+			printf("Error: READ BLOCK %zu (of %zu) failed, insufficient response bytes\n", block, numLTOCMBlocks-1);
+			returncode = EXIT_FAILURE;
+			goto err_exit;
+		}
+
 		// TODO Check CRC
 
 		memcpy(&blockBuf[16], abtRx, 16);
