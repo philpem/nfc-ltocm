@@ -231,17 +231,26 @@ int main(void)
 	// Send LTO-CM REQUEST SERIAL NUMBER
 	//   (LTO-CM state PRESELECT -> PRESELECT)
 	if (!transmit_bytes(LTOCM_REQUEST_SERIAL_NUM, 2)) {
-		printf("Error: error with REQUEST SERIAL NUMBER command\n");
+		printf("Error: error with REQUEST SERIAL NUMBER command.\n");
 		returncode = EXIT_FAILURE;
 		goto err_exit;
 	}
 	if (szRxBytes < 5) {
-		printf("Error: REQUEST SERIAL NUMBER returned too few bytes");
+		printf("Error: REQUEST SERIAL NUMBER returned too few bytes.\n");
 		returncode = EXIT_FAILURE;
 		goto err_exit;
 	}
 	printf("Found LTO-CM tag with s/n %02X:%02X:%02X:%02X:%02X\n",
 			abtRx[0], abtRx[1], abtRx[2], abtRx[3], abtRx[4]);
+
+
+	// Check the serial number's validity
+	uint8_t ltosnCheck = abtRx[0] ^ abtRx[1] ^ abtRx[2] ^ abtRx[3];
+	if (ltosnCheck != abtRx[4]) {
+		printf("Error: REQUEST SERIAL NUMBER returned an invalid serial number.\n");
+		returncode = EXIT_FAILURE;
+		goto err_exit;
+	}
 
 
 	// Send LTO-CM SELECT to Select the chip we just found
