@@ -269,16 +269,19 @@ int main(void)
 	FILE *fp = fopen("cartdata.ltocm", "wb");
 	uint8_t readBlockCmd[4] = { 0x30, 0, 0, 0 };
 	uint8_t blockBuf[32];
+	uint8_t crcBlock[2];
 	for (size_t block = 0; block < numLTOCMBlocks; block++) {
 		readBlockCmd[1] = block;
 		iso14443a_crc_append(readBlockCmd, 2);
 
+		// read the first half of the block
 		if (!transmit_bytes(readBlockCmd, sizeof(readBlockCmd))) {
 			printf("Error: error with READ BLOCK command, block=%zu of %zu\n", block, numLTOCMBlocks-1);
 			returncode = EXIT_FAILURE;
 			goto err_exit;
 		}
 
+		// check the byte count and response bytes
 		if ((szRxBytes == 1) && (abtRx[0] == LTOCM_NACK)) {
 			printf("Error: READ BLOCK %zu (of %zu) failed, NACK\n", block, numLTOCMBlocks-1);
 			returncode = EXIT_FAILURE;
@@ -289,16 +292,26 @@ int main(void)
 			goto err_exit;
 		}
 
-		// TODO Check CRC
+		// check the CRC
+		iso14443a_crc(abtRx, 16, crcBlock);
+		if (memcmp(&abtRx[16], crcBlock, 2) != 0) {
+			printf("Error: READ BLOCK %zu (of %zu) failed, CRC error\n", block, numLTOCMBlocks-1);
+			returncode = EXIT_FAILURE;
+			goto err_exit;
+		}
 
+		// copy first half of the block into the buffer
 		memcpy(blockBuf, abtRx, 16);
 
+
+		// read the second half of the block
 		if (!transmit_bytes(LTOCM_READ_BLOCK_CONTINUE, sizeof(LTOCM_READ_BLOCK_CONTINUE))) {
 			printf("Error: error with READ BLOCK CONTINUE command, block=%zu\n", block);
 			returncode = EXIT_FAILURE;
 			goto err_exit;
 		}
 
+		// check the byte count and response bytes
 		if ((szRxBytes == 1) && (abtRx[0] == LTOCM_NACK)) {
 			printf("Error: READ BLOCK %zu (of %zu) failed, NACK\n", block, numLTOCMBlocks-1);
 			returncode = EXIT_FAILURE;
@@ -309,10 +322,18 @@ int main(void)
 			goto err_exit;
 		}
 
-		// TODO Check CRC
+		// check the CRC
+		iso14443a_crc(abtRx, 16, crcBlock);
+		if (memcmp(&abtRx[16], crcBlock, 2) != 0) {
+			printf("Error: READ BLOCK %zu (of %zu) failed, CRC error\n", block, numLTOCMBlocks-1);
+			returncode = EXIT_FAILURE;
+			goto err_exit;
+		}
 
+		// copy second half of the block into the buffer
 		memcpy(&blockBuf[16], abtRx, 16);
 
+		// save the whole block to the file
 		fwrite(blockBuf, 1, sizeof(blockBuf), fp);
 	}
 
