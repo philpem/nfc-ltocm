@@ -133,9 +133,15 @@ static bool transmit_bytes(const uint8_t *pbtTx, const size_t szTx)
 
 
 
-int main(void)
+int main(int argc, char **argv)
 {
 	int returncode = EXIT_SUCCESS;
+
+	if (argc != 2) {
+		fprintf(stderr, "%s: read LTO-CM memory data to file\n", argv[0]);
+		fprintf(stderr, "Syntax: %s filename\n", argv[0]);
+		return EXIT_FAILURE;
+	}
 
 	// Initialise libnfc
 	nfc_context *context;
@@ -272,16 +278,18 @@ int main(void)
 		goto err_exit;
 	}
 
-	printf("LTO-CM chip selected\n");
-
-
 	// Chip is now in the LTO-CM COMMAND state, we should be able to read it
-
 
 	// Read all blocks in the chip
 	printf("Reading LTO-CM data to file\n");
 
-	FILE *fp = fopen("cartdata.ltocm", "wb");
+	FILE *fp = fopen(argv[1], "wb");
+	if (!fp) {
+		printf("Error: cannot open output file '%s'\n", argv[1]);
+		returncode = EXIT_FAILURE;
+		goto err_exit;
+	}
+
 	uint8_t readBlockCmd[4] = { 0x30, 0, 0, 0 };
 	uint8_t blockBuf[32];
 	uint8_t crcBlock[2];
