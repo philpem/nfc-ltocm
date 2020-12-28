@@ -6,7 +6,8 @@ Author: Phil Pemberton <philpem@philpem.me.uk>
 ## Usage
 
   - Place an LTO tape on your NFC reader, with the CM chip (on the label side, opposite the write-protect tab) centred over the aerial.
-  - Run nfc-ltocm.
+  - Run `nfc-ltocm`.
+  - Feed the output to [LTO-CM-Analyzer](https://github.com/Kevin-Nakamoto/LTO-CM-Analyzer)
   - Enjoy.
 
 
