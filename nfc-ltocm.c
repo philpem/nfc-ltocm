@@ -137,12 +137,6 @@ int main(int argc, char **argv)
 {
 	int returncode = EXIT_SUCCESS;
 
-	if (argc != 2) {
-		fprintf(stderr, "%s: read LTO-CM memory data to file\n", argv[0]);
-		fprintf(stderr, "Syntax: %s filename\n", argv[0]);
-		return EXIT_FAILURE;
-	}
-
 	// Initialise libnfc
 	nfc_context *context;
 	nfc_init(&context);
@@ -241,6 +235,7 @@ int main(int argc, char **argv)
 		returncode = EXIT_FAILURE;
 		goto err_exit;
 	}
+
 	if (szRxBytes < 5) {
 		printf("Error: REQUEST SERIAL NUMBER returned too few bytes.\n");
 		returncode = EXIT_FAILURE;
@@ -248,7 +243,8 @@ int main(int argc, char **argv)
 	}
 	printf("Found LTO-CM tag with s/n %02X:%02X:%02X:%02X:%02X\n",
 			abtRx[0], abtRx[1], abtRx[2], abtRx[3], abtRx[4]);
-
+	char default_filename[12];
+	sprintf(default_filename, "%02X%02X%02X%02X.bin", abtRx[0], abtRx[1], abtRx[2], abtRx[3]);
 
 	// Check the serial number's validity
 	uint8_t ltosnCheck = abtRx[0] ^ abtRx[1] ^ abtRx[2] ^ abtRx[3];
@@ -257,7 +253,6 @@ int main(int argc, char **argv)
 		returncode = EXIT_FAILURE;
 		goto err_exit;
 	}
-
 
 	// Send LTO-CM SELECT to Select the chip we just found
 	//   (LTO-CM state PRESELECT -> COMMAND)
@@ -283,7 +278,14 @@ int main(int argc, char **argv)
 	// Read all blocks in the chip
 	printf("Reading LTO-CM data to file\n");
 
-	FILE *fp = fopen(argv[1], "wb");
+	char *p_filename;
+	if (argc == 1) {
+		p_filename = &default_filename[0];
+	} else {
+		p_filename = argv[1];
+	}
+
+	FILE *fp = fopen(p_filename, "wb");
 	if (!fp) {
 		printf("Error: cannot open output file '%s'\n", argv[1]);
 		returncode = EXIT_FAILURE;
