@@ -243,7 +243,7 @@ int main(int argc, char **argv)
 	}
 	printf("Found LTO-CM tag with s/n %02X:%02X:%02X:%02X:%02X\n",
 			abtRx[0], abtRx[1], abtRx[2], abtRx[3], abtRx[4]);
-	char default_filename[12];
+	char default_filename[13];
 	sprintf(default_filename, "%02X%02X%02X%02X.bin", abtRx[0], abtRx[1], abtRx[2], abtRx[3]);
 
 	// Check the serial number's validity
