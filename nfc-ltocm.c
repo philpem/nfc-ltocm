@@ -142,6 +142,17 @@ bool ltocm_req_std(uint8_t *ltoStandard)
 
 }
 
+bool ltocm_req_serial(uint8_t *serialNum, int *serialNumLen)
+{
+	if (!transmit_bytes(LTOCM_REQUEST_SERIAL_NUM, 2))
+		return false;
+
+	memcpy(serialNum, abtRx, 5);
+	*serialNumLen = szRxBytes;
+	return true;
+
+}
+
 int main(int argc, char **argv)
 {
 	int returncode = EXIT_SUCCESS;
@@ -238,25 +249,27 @@ int main(int argc, char **argv)
 
 	// Send LTO-CM REQUEST SERIAL NUMBER
 	//   (LTO-CM state PRESELECT -> PRESELECT)
-	if (!transmit_bytes(LTOCM_REQUEST_SERIAL_NUM, 2)) {
+	uint8_t serialNum[5];
+	int serialNumLen = 0;
+	if (!ltocm_req_serial(&serialNum[0], &serialNumLen)) {
 		printf("Error: error with REQUEST SERIAL NUMBER command.\n");
 		returncode = EXIT_FAILURE;
 		goto err_exit;
 	}
 
-	if (szRxBytes < 5) {
+	if (serialNumLen < 5) {
 		printf("Error: REQUEST SERIAL NUMBER returned too few bytes.\n");
 		returncode = EXIT_FAILURE;
 		goto err_exit;
 	}
 	printf("Found LTO-CM tag with s/n %02X:%02X:%02X:%02X:%02X\n",
-			abtRx[0], abtRx[1], abtRx[2], abtRx[3], abtRx[4]);
+			serialNum[0], serialNum[1], serialNum[2], serialNum[3], serialNum[4]);
 	char default_filename[13];
-	sprintf(default_filename, "%02X%02X%02X%02X.bin", abtRx[0], abtRx[1], abtRx[2], abtRx[3]);
+	sprintf(default_filename, "%02X%02X%02X%02X.bin", serialNum[0], serialNum[1], serialNum[2], serialNum[3]);
 
 	// Check the serial number's validity
-	uint8_t ltosnCheck = abtRx[0] ^ abtRx[1] ^ abtRx[2] ^ abtRx[3];
-	if (ltosnCheck != abtRx[4]) {
+	uint8_t ltosnCheck = serialNum[0] ^ serialNum[1] ^ serialNum[2] ^ serialNum[3];
+	if (ltosnCheck != serialNum[4]) {
 		printf("Error: REQUEST SERIAL NUMBER returned an invalid serial number.\n");
 		returncode = EXIT_FAILURE;
 		goto err_exit;
