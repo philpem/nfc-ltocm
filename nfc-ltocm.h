@@ -3,6 +3,6 @@
 
 bool ltocm_req_std(uint8_t *ltoStandard);
 bool ltocm_req_serial(uint8_t *serialNum, int *serialNumLen);
-
+bool ltocm_select(uint8_t *serialNum, uint8_t *retSelect, int *retLenSelect);
 
 #endif

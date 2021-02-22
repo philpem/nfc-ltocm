@@ -153,6 +153,22 @@ bool ltocm_req_serial(uint8_t *serialNum, int *serialNumLen)
 
 }
 
+bool ltocm_select(uint8_t *serialNum, uint8_t *retSelect, int *retLenSelect)
+{
+	uint8_t selectCmd[sizeof(LTOCM_SELECT)];
+	memcpy(selectCmd, LTOCM_SELECT, sizeof(LTOCM_SELECT));
+	memcpy(&selectCmd[2], &serialNum[0], 5);
+        iso14443a_crc_append(selectCmd, 7);
+
+	if (!transmit_bytes(selectCmd, sizeof(LTOCM_SELECT)))
+		return false;
+
+	*retSelect = abtRx[0];
+	*retLenSelect = szRxBytes;
+	return true;
+
+}
+
 int main(int argc, char **argv)
 {
 	int returncode = EXIT_SUCCESS;
@@ -277,18 +293,16 @@ int main(int argc, char **argv)
 
 	// Send LTO-CM SELECT to Select the chip we just found
 	//   (LTO-CM state PRESELECT -> COMMAND)
-	uint8_t selectCmd[sizeof(LTOCM_SELECT)];
-	memcpy(selectCmd, LTOCM_SELECT, sizeof(LTOCM_SELECT));
-	memcpy(&selectCmd[2], abtRx, 5);
-	iso14443a_crc_append(selectCmd, 7);
-	if (!transmit_bytes(selectCmd, sizeof(LTOCM_SELECT))) {
+	uint8_t retSelect;
+	int retLenSelect;
+	if (!ltocm_select(&serialNum[0], &retSelect, &retLenSelect)) {
 		printf("Error: error with SELECT command\n");
 		returncode = EXIT_FAILURE;
 		goto err_exit;
 	}
 
 	// Check that the LTO-CM chip sent us an acknowledgement
-	if ((szRxBytes != 1) || (abtRx[0] != 0x0A)) {
+	if ((retLenSelect != 1) || (retSelect != 0x0A)) {
 		printf("Error: Failed to SELECT the LTO-CM chip\n");
 		returncode = EXIT_FAILURE;
 		goto err_exit;
