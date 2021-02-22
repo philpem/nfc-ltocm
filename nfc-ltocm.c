@@ -19,6 +19,7 @@
 
 #include <nfc/nfc.h>
 
+#include "nfc-ltocm.h"
 #include "nfc-utils.h"
 
 
@@ -131,7 +132,15 @@ static bool transmit_bytes(const uint8_t *pbtTx, const size_t szTx)
 	return true;
 }
 
+bool ltocm_req_std(uint8_t *ltoStandard)
+{
+	if (!transmit_bits(LTOCM_REQUEST_STANDARD, 7))
+		return false;
 
+	memcpy(ltoStandard, abtRx, 2);
+	return true;
+
+}
 
 int main(int argc, char **argv)
 {
@@ -186,13 +195,12 @@ int main(int argc, char **argv)
 	// Send LTO-CM REQUEST STANDARD
 	//   (LTO-CM state transition INIT -> PRESELECT)
 	uint8_t ltoStandard[2];
-	if (!transmit_bits(LTOCM_REQUEST_STANDARD, 7)) {
+	if (!ltocm_req_std(&ltoStandard[0])) {
 		printf("Error: error with LTOCM REQUEST STANDARD, no tag present?\n");
 		returncode = EXIT_FAILURE;
 		goto err_exit;
 	}
-	printf("LTO REQUEST STANDARD: %02X %02X\n", abtRx[0], abtRx[1]);
-	memcpy(ltoStandard, abtRx, 2);
+	printf("LTO REQUEST STANDARD: %02X %02X\n", ltoStandard[0], ltoStandard[1]);
 
 	size_t numLTOCMBlocks = 0;
 
@@ -213,7 +221,7 @@ int main(int argc, char **argv)
 	 */
 
 	// Validate LTO-CM REQUEST STANDARD response
-	uint16_t ltoCMStandard = ((uint16_t)abtRx[0] << 8) | ((uint16_t)abtRx[1]);
+	uint16_t ltoCMStandard = ((uint16_t)ltoStandard[0] << 8) | ((uint16_t)ltoStandard[1]);
 	switch (ltoCMStandard) {
 		case 0x0001:
 			numLTOCMBlocks = 127;
