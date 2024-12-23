@@ -24,7 +24,7 @@ The LTO-CM chip is located at the back of the cartridge, behind the right side o
 
 To reduce the potential for abuse by unscrupulous dealers of "refurbished" media, `nfc-ltocm` can only read from the LTO-CM chip. Write support is not present, nor is it likely to be added.
 
-LTO-CM memories of type 3 are not supported, due to a lack of tapes to test with.
+LTO-CM memories of type 3 are somewhat supported, tested it with a few tapes, so far it works.
 
 LTO-CM memories of type 4 or later are not supported, as these are not specified in ECMA-319. If you have a datasheet or specification for a later revision of LTO-CM memory chip, please contact me on the email address above. If you've successfully added Type 3 or later memory device support, please open a PR.
 
