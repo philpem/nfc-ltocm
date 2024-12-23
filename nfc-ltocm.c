@@ -285,6 +285,9 @@ int main(int argc, char **argv)
 		case 0x0002:
 			numLTOCMBlocks = 255;
 			break;
+		case 0x0003:
+			numLTOCMBlocks = 255;
+			break;
 		default:
 			printf("Error: unknown LTO-CM memory type %04X\n", ltoCMStandard);
 			returncode = EXIT_FAILURE;
