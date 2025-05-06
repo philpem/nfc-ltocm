@@ -197,7 +197,7 @@ bool ltocm_readblk_ext(size_t block, uint8_t *retReadBlk, int *retLenReadBlk)
 	readBlockCmd[1] = block & 0xff;
 	readBlockCmd[2] = (block >>8) & 0xff;
 
-	iso14443a_crc_append(readBlockCmd, sizeof(LTOCM_READ_BLOCK_EXT)-2);
+	iso14443a_crc_append(readBlockCmd, 3);
 	
 	if (!transmit_bytes(readBlockCmd, sizeof(readBlockCmd)))
 		return false;
@@ -388,20 +388,19 @@ int main(int argc, char **argv)
 	for (size_t block = 0; block < numLTOCMBlocks; block++) {
 
 		// read the first half of the block
-		if (numLTOCMBlocks<=255)
-		{//Use old function that uses one byte for block address
-		        if (!ltocm_readblk(block, &retReadBlk[0], &retLenReadBlk)) {
-			        printf("Error: error with READ BLOCK command, block=%zu of %zu\n", block, numLTOCMBlocks-1);
-			        returncode = EXIT_FAILURE;
-			        goto err_exit;
-		        }
-                } else { //Use new function that uses 2 bytes for block address
-		        if (!ltocm_readblk_ext(block, &retReadBlk[0], &retLenReadBlk)) {
-			        printf("Error: error with READ BLOCK command, block=%zu of %zu\n", block, numLTOCMBlocks-1);
-			        returncode = EXIT_FAILURE;
-			        goto err_exit;
-		        }
-                }
+		if (numLTOCMBlocks <= 255) {
+			if (!ltocm_readblk(block, &retReadBlk[0], &retLenReadBlk)) {
+				printf("Error: error with READ BLOCK command, block=%zu of %zu\n", block, numLTOCMBlocks-1);
+				returncode = EXIT_FAILURE;
+				goto err_exit;
+			}
+		} else {
+			if (!ltocm_readblk_ext(block, &retReadBlk[0], &retLenReadBlk)) {
+				printf("Error: error with READ BLOCK command, block=%zu of %zu\n", block, numLTOCMBlocks-1);
+				returncode = EXIT_FAILURE;
+				goto err_exit;
+			}
+		}
 		// check the byte count and response bytes
 		if ((retLenReadBlk == 1) && (retReadBlk[0] == LTOCM_NACK)) {
 			printf("Error: READ BLOCK %zu (of %zu) failed, NACK\n", block, numLTOCMBlocks-1);
