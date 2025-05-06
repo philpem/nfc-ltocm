@@ -54,6 +54,9 @@ const uint8_t LTOCM_SELECT[]				= { 0x93, 0x70, 0, 0, 0, 0, 0, 0, 0 };
 /// LTO-CM READ BLOCK: zeroes are block address and 2-byte checksum.
 const uint8_t LTOCM_READ_BLOCK[]			= { 0x30, 0, 0, 0 };
 
+/// LTO-CM READ BLOCK: zeroes are 2 bytes for block address and 2-byte checksum.
+const uint8_t LTOCM_READ_BLOCK_EXT[]			= { 0x21, 0, 0, 0, 0 };
+
 /// LTO-CM READ BLOCK CONTINUE
 const uint8_t LTOCM_READ_BLOCK_CONTINUE[]	= { 0x80 };
 
@@ -187,6 +190,24 @@ bool ltocm_readblk(size_t block, uint8_t *retReadBlk, int *retLenReadBlk)
 
 }
 
+bool ltocm_readblk_ext(size_t block, uint8_t *retReadBlk, int *retLenReadBlk)
+{
+	uint8_t readBlockCmd[sizeof(LTOCM_READ_BLOCK_EXT)];
+	memcpy(readBlockCmd, LTOCM_READ_BLOCK_EXT, sizeof(LTOCM_READ_BLOCK_EXT));
+	readBlockCmd[1] = block & 0xff;
+	readBlockCmd[2] = (block >>8) & 0xff;
+
+	iso14443a_crc_append(readBlockCmd, sizeof(LTOCM_READ_BLOCK_EXT)-2);
+	
+	if (!transmit_bytes(readBlockCmd, sizeof(readBlockCmd)))
+		return false;
+
+	memcpy(retReadBlk, abtRx, 18);
+	*retLenReadBlk = szRxBytes;
+	return true;
+
+}
+
 bool ltocm_readblkcnt(uint8_t *retReadBlk, int *retLenReadBlk)
 {
 	if (!transmit_bytes(LTOCM_READ_BLOCK_CONTINUE, sizeof(LTOCM_READ_BLOCK_CONTINUE)))
@@ -285,6 +306,9 @@ int main(int argc, char **argv)
 		case 0x0002:
 			numLTOCMBlocks = 255;
 			break;
+		case 0x0003:
+			numLTOCMBlocks = 511;
+			break;
 		default:
 			printf("Error: unknown LTO-CM memory type %04X\n", ltoCMStandard);
 			returncode = EXIT_FAILURE;
@@ -364,12 +388,20 @@ int main(int argc, char **argv)
 	for (size_t block = 0; block < numLTOCMBlocks; block++) {
 
 		// read the first half of the block
-		if (!ltocm_readblk(block, &retReadBlk[0], &retLenReadBlk)) {
-			printf("Error: error with READ BLOCK command, block=%zu of %zu\n", block, numLTOCMBlocks-1);
-			returncode = EXIT_FAILURE;
-			goto err_exit;
-		}
-
+		if (numLTOCMBlocks<=255)
+		{//Use old function that uses one byte for block address
+		        if (!ltocm_readblk(block, &retReadBlk[0], &retLenReadBlk)) {
+			        printf("Error: error with READ BLOCK command, block=%zu of %zu\n", block, numLTOCMBlocks-1);
+			        returncode = EXIT_FAILURE;
+			        goto err_exit;
+		        }
+                } else { //Use new function that uses 2 bytes for block address
+		        if (!ltocm_readblk_ext(block, &retReadBlk[0], &retLenReadBlk)) {
+			        printf("Error: error with READ BLOCK command, block=%zu of %zu\n", block, numLTOCMBlocks-1);
+			        returncode = EXIT_FAILURE;
+			        goto err_exit;
+		        }
+                }
 		// check the byte count and response bytes
 		if ((retLenReadBlk == 1) && (retReadBlk[0] == LTOCM_NACK)) {
 			printf("Error: READ BLOCK %zu (of %zu) failed, NACK\n", block, numLTOCMBlocks-1);
