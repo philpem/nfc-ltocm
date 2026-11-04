@@ -219,6 +219,47 @@ bool ltocm_readblkcnt(uint8_t *retReadBlk, int *retLenReadBlk)
 
 }
 
+/// Read one complete 32-byte LTO-CM block.
+///
+/// The first 16 bytes are fetched with READ BLOCK (or READ BLOCK EXT for
+/// addresses above 255), the second 16 with READ BLOCK CONTINUE. Each half
+/// carries its own CRC. Returns true only if both halves were read and
+/// verified.
+bool ltocm_read_block(size_t block, uint8_t *retBlock)
+{
+	uint8_t readBlk[18];
+	int lenReadBlk;
+	uint8_t crcBlock[2];
+
+	for (int half = 0; half < 2; half++) {
+		bool ok;
+		if (half == 0) {
+			if (block <= 0xFF) {
+				ok = ltocm_readblk(block, &readBlk[0], &lenReadBlk);
+			} else {
+				ok = ltocm_readblk_ext(block, &readBlk[0], &lenReadBlk);
+			}
+		} else {
+			ok = ltocm_readblkcnt(&readBlk[0], &lenReadBlk);
+		}
+
+		if (!ok)
+			return false;
+		if ((lenReadBlk == 1) && (readBlk[0] == LTOCM_NACK))
+			return false;
+		if (lenReadBlk != 18)
+			return false;
+
+		iso14443a_crc(readBlk, 16, crcBlock);
+		if (memcmp(&readBlk[16], crcBlock, 2) != 0)
+			return false;
+
+		memcpy(&retBlock[half * 16], readBlk, 16);
+	}
+
+	return true;
+}
+
 int main(int argc, char **argv)
 {
 	int returncode = EXIT_SUCCESS;
@@ -279,35 +320,14 @@ int main(int argc, char **argv)
 	}
 	printf("LTO REQUEST STANDARD: %02X %02X\n", ltoStandard[0], ltoStandard[1]);
 
-	size_t numLTOCMBlocks = 0;
-
-	/* According to the Proxmark 3 LTO-CM code (client/src/cmdhflto.c), the
-	 * memory sizes are:
-	 *   LTO type info 00,01: 101 blocks  -- wrong, 127
-	 *   LTO type info 00,02:  95 blocks  -- wrong, 255
-	 *   LTO type info 00,03: 255 blocks
-	 *
-	 * This seems to be incorrect. The LTO chip size is stored in Block 0.
-	 * See ECMA-319 Annex D, D.2.1 "LTO-CM Manufacturer's Information"
-	 *
-	 * I have a type=2 chip (on a Sony LTO4 cartridge from 2015) which declares
-	 * 8*1024 bytes capacity in Block 0, and has 255 readable blocks.
-	 *
-	 * A HP cleaning catridge with memory type=1 declares 4*1024 bytes capacity
-	 * and has 127 readable blocks.
-	 */
-
-	// Validate LTO-CM REQUEST STANDARD response
+	// Validate LTO-CM REQUEST STANDARD response. This gives the memory type,
+	// but the reply does not always agree with the capacity the chip actually
+	// declares, so it is only used as a fallback for sizing (see below).
 	uint16_t ltoCMStandard = ((uint16_t)ltoStandard[0] << 8) | ((uint16_t)ltoStandard[1]);
 	switch (ltoCMStandard) {
 		case 0x0001:
-			numLTOCMBlocks = 127;
-			break;
 		case 0x0002:
-			numLTOCMBlocks = 255;
-			break;
 		case 0x0003:
-			numLTOCMBlocks = 511;
 			break;
 		default:
 			printf("Error: unknown LTO-CM memory type %04X\n", ltoCMStandard);
@@ -363,6 +383,30 @@ int main(int argc, char **argv)
 
 	// Chip is now in the LTO-CM COMMAND state, we should be able to read it
 
+	// The chip declares its own capacity in Block 0, byte 5, in units of
+	// 1 KiB (ECMA-319 Annex D, D.2.1). This is more reliable than the memory
+	// type from REQUEST STANDARD, whose usual values are one block short:
+	// a 4 KiB part has 128 blocks, an 8 KiB part 256, a 16 KiB part 512.
+	uint8_t block0[32];
+	if (!ltocm_read_block(0, block0)) {
+		printf("Error: could not read LTO-CM block 0\n");
+		returncode = EXIT_FAILURE;
+		goto err_exit;
+	}
+
+	size_t capacity = (size_t)block0[5] << 10;
+	size_t numLTOCMBlocks = capacity / 32;
+
+	if ((numLTOCMBlocks < 32) || (numLTOCMBlocks > 1024)) {
+		printf("Warning: implausible LTO-CM capacity %zu bytes (block 0 byte 5 = 0x%02X), falling back to memory type\n",
+				capacity, block0[5]);
+		numLTOCMBlocks = (ltoCMStandard == 0x0001) ? 128 :
+				(ltoCMStandard == 0x0002) ? 256 : 512;
+	}
+
+	printf("LTO-CM capacity: %zu bytes, %zu blocks\n",
+			numLTOCMBlocks * 32, numLTOCMBlocks);
+
 	// Read all blocks in the chip
 	printf("Reading LTO-CM data to file\n");
 
@@ -380,78 +424,26 @@ int main(int argc, char **argv)
 		goto err_exit;
 	}
 
+	// Block 0 has already been read (it carries the capacity), so write it
+	// out first and then read the remainder.
+	fwrite(block0, 1, sizeof(block0), fp);
+
 	uint8_t blockBuf[32];
-	uint8_t crcBlock[2];
-	uint8_t retReadBlk[18];
-	int retLenReadBlk;
 
-	for (size_t block = 0; block < numLTOCMBlocks; block++) {
-
-		// read the first half of the block
-		if (numLTOCMBlocks <= 255) {
-			if (!ltocm_readblk(block, &retReadBlk[0], &retLenReadBlk)) {
-				printf("Error: error with READ BLOCK command, block=%zu of %zu\n", block, numLTOCMBlocks-1);
-				returncode = EXIT_FAILURE;
-				goto err_exit;
+	for (size_t block = 1; block < numLTOCMBlocks; block++) {
+		if (!ltocm_read_block(block, blockBuf)) {
+			if (block == numLTOCMBlocks - 1) {
+				// Some chips do not expose the final block of their
+				// declared address range. That is not an error: the dump
+				// is complete apart from that block.
+				printf("Warning: final block (%zu) not readable, dump is one block short\n", block);
+				break;
 			}
-		} else {
-			if (!ltocm_readblk_ext(block, &retReadBlk[0], &retLenReadBlk)) {
-				printf("Error: error with READ BLOCK command, block=%zu of %zu\n", block, numLTOCMBlocks-1);
-				returncode = EXIT_FAILURE;
-				goto err_exit;
-			}
-		}
-		// check the byte count and response bytes
-		if ((retLenReadBlk == 1) && (retReadBlk[0] == LTOCM_NACK)) {
-			printf("Error: READ BLOCK %zu (of %zu) failed, NACK\n", block, numLTOCMBlocks-1);
+			printf("Error: READ BLOCK %zu (of %zu) failed\n", block, numLTOCMBlocks-1);
 			returncode = EXIT_FAILURE;
-			goto err_exit;
-		} else if (retLenReadBlk != 18) {
-			printf("Error: READ BLOCK %zu (of %zu) failed, insufficient response bytes\n", block, numLTOCMBlocks-1);
-			returncode = EXIT_FAILURE;
+			fclose(fp);
 			goto err_exit;
 		}
-
-		// check the CRC
-		iso14443a_crc(retReadBlk, 16, crcBlock);
-		if (memcmp(&retReadBlk[16], crcBlock, 2) != 0) {
-			printf("Error: READ BLOCK %zu (of %zu) failed, CRC error\n", block, numLTOCMBlocks-1);
-			returncode = EXIT_FAILURE;
-			goto err_exit;
-		}
-
-		// copy first half of the block into the buffer
-		memcpy(blockBuf, retReadBlk, 16);
-
-
-		// read the second half of the block
-		if (!ltocm_readblkcnt(&retReadBlk[0], &retLenReadBlk)) {
-			printf("Error: error with READ BLOCK CONTINUE command, block=%zu\n", block);
-			returncode = EXIT_FAILURE;
-			goto err_exit;
-		}
-
-		// check the byte count and response bytes
-		if ((retLenReadBlk == 1) && (retReadBlk[0] == LTOCM_NACK)) {
-			printf("Error: READ BLOCK %zu (of %zu) failed, NACK\n", block, numLTOCMBlocks-1);
-			returncode = EXIT_FAILURE;
-			goto err_exit;
-		} else if (retLenReadBlk != 18) {
-			printf("Error: READ BLOCK %zu (of %zu) failed, insufficient response bytes\n", block, numLTOCMBlocks-1);
-			returncode = EXIT_FAILURE;
-			goto err_exit;
-		}
-
-		// check the CRC
-		iso14443a_crc(retReadBlk, 16, crcBlock);
-		if (memcmp(&retReadBlk[16], crcBlock, 2) != 0) {
-			printf("Error: READ BLOCK %zu (of %zu) failed, CRC error\n", block, numLTOCMBlocks-1);
-			returncode = EXIT_FAILURE;
-			goto err_exit;
-		}
-
-		// copy second half of the block into the buffer
-		memcpy(&blockBuf[16], retReadBlk, 16);
 
 		// save the whole block to the file
 		fwrite(blockBuf, 1, sizeof(blockBuf), fp);

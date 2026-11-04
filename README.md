@@ -24,9 +24,13 @@ The LTO-CM chip is located at the back of the cartridge, behind the right side o
 
 To reduce the potential for abuse by unscrupulous dealers of "refurbished" media, `nfc-ltocm` can only read from the LTO-CM chip. Write support is not present, nor is it likely to be added.
 
-LTO-CM memories of type 3 are not supported, due to a lack of tapes to test with.
+The chip size is taken from Block 0, byte 5, which declares the memory capacity in units of 1 KiB (ECMA-319 Annex D, D.2.1). The memory type reported by REQUEST STANDARD is only used as a fallback if that value looks implausible, because it is commonly one block short of the real capacity.
 
-LTO-CM memories of type 4 or later are not supported, as these are not specified in ECMA-319. If you have a datasheet or specification for a later revision of LTO-CM memory chip, please contact me on the email address above. If you've successfully added Type 3 or later memory device support, please open a PR.
+If the final block of the declared range cannot be read, the tool prints a warning and keeps the rest of the dump; some chips reserve that block.
+
+LTO-CM memories of type 3 (16 KiB, 512 blocks) are supported but untested here, due to a lack of tapes. The code paths for addresses above 255 blocks (READ BLOCK EXT) are in place.
+
+LTO-CM memories of type 4 or later are not specified in ECMA-319; the tool will read up to the declared capacity, with a sanity limit of 32 KiB (1024 blocks). If you have a datasheet or specification for a later revision of LTO-CM memory chip, please contact me on the email address above. If you've successfully tested Type 3 or later memory device support, please open a PR.
 
 
 ## Credits
