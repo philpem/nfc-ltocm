@@ -28,6 +28,8 @@ The chip size is taken from Block 0, byte 5, which declares the memory capacity 
 
 If the final block of the declared range cannot be read, the tool reports it and keeps the rest of the dump. On the LTO-6 cartridge tested, blocks 0-510 read normally and block 511 is not exposed, so a 16 KiB chip yields 511 blocks. Note that `READ BLOCK` only addresses blocks 0-254; the tool uses `READ BLOCK EXT` from block 255 upwards.
 
+The output file is always exactly the declared capacity: if a block could not be read, it is written as zeros so the file size matches what consumers expect. Veritape, for example, refuses a cartridge file that is shorter than the declared size, reporting "Could not read from input file ... Error 0".
+
 LTO-CM memories of type 3 (16 KiB) are supported and have been tested on an LTO-6 cartridge.
 
 LTO-CM memories of type 4 or later are not specified in ECMA-319; the tool will read up to the declared capacity, with a sanity limit of 32 KiB (1024 blocks). If you have a datasheet or specification for a later revision of LTO-CM memory chip, please contact me on the email address above. If you've successfully tested Type 3 or later memory device support, please open a PR.

@@ -485,6 +485,20 @@ int main(int argc, char **argv)
 		blocksWritten++;
 	}
 
+	if (blocksWritten < numLTOCMBlocks) {
+		// The final block is often not readable, but consumers such as
+		// Veritape expect a file of exactly the declared size.
+		uint8_t zeroBlock[32] = { 0 };
+		size_t missingBlocks = numLTOCMBlocks - blocksWritten;
+
+		for (size_t block = 0; block < missingBlocks; block++)
+			fwrite(zeroBlock, 1, sizeof(zeroBlock), fp);
+
+		printf("Padded %zu unreadable block(s) with zeros to the %zu-byte declared capacity\n",
+				missingBlocks, numLTOCMBlocks * 32);
+		blocksWritten += missingBlocks;
+	}
+
 	fclose(fp);
 
 	printf("Wrote %zu blocks (%zu bytes) to %s\n",
