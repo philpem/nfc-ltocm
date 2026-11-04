@@ -283,7 +283,11 @@ bool ltocm_read_block(size_t block, uint8_t *retBlock)
 {
 	bool use_ext = (block >= 0xFF);
 
-	if (!ltocm_read_half(block, use_ext, &retBlock[0]) &&
+	if (block > 0xFF) {
+		// Too large for the short form's one-byte address.
+		if (!ltocm_read_half(block, true, &retBlock[0]))
+			return false;
+	} else if (!ltocm_read_half(block, use_ext, &retBlock[0]) &&
 			!ltocm_read_half(block, !use_ext, &retBlock[0])) {
 		return false;
 	}
@@ -458,16 +462,16 @@ int main(int argc, char **argv)
 	// Block 0 has already been read (it carries the capacity), so write it
 	// out first and then read the remainder.
 	fwrite(block0, 1, sizeof(block0), fp);
+	size_t blocksWritten = 1;
 
 	uint8_t blockBuf[32];
 
 	for (size_t block = 1; block < numLTOCMBlocks; block++) {
 		if (!ltocm_read_block(block, blockBuf)) {
 			if (block == numLTOCMBlocks - 1) {
-				// Some chips do not expose the final block of their
-				// declared address range. That is not an error: the dump
-				// is complete apart from that block.
-				printf("Warning: final block (%zu) not readable, dump is one block short\n", block);
+				// The final block of the declared range is often not
+				// exposed by the chip. That is not an error.
+				printf("Note: final block (%zu) is not readable; the chip does not expose it\n", block);
 				break;
 			}
 			printf("Error: READ BLOCK %zu (of %zu) failed\n", block, numLTOCMBlocks-1);
@@ -478,9 +482,13 @@ int main(int argc, char **argv)
 
 		// save the whole block to the file
 		fwrite(blockBuf, 1, sizeof(blockBuf), fp);
+		blocksWritten++;
 	}
 
 	fclose(fp);
+
+	printf("Wrote %zu blocks (%zu bytes) to %s\n",
+			blocksWritten, blocksWritten * 32, p_filename);
 
 
 err_exit:

@@ -26,9 +26,9 @@ To reduce the potential for abuse by unscrupulous dealers of "refurbished" media
 
 The chip size is taken from Block 0, byte 5, which declares the memory capacity in units of 1 KiB (ECMA-319 Annex D, D.2.1). The memory type reported by REQUEST STANDARD is only used as a fallback if that value looks implausible, because it is commonly one block short of the real capacity.
 
-If the final block of the declared range cannot be read, the tool prints a warning and keeps the rest of the dump; some chips reserve that block.
+If the final block of the declared range cannot be read, the tool reports it and keeps the rest of the dump. On the LTO-6 cartridge tested, blocks 0-510 read normally and block 511 is not exposed, so a 16 KiB chip yields 511 blocks. Note that `READ BLOCK` only addresses blocks 0-254; the tool uses `READ BLOCK EXT` from block 255 upwards.
 
-LTO-CM memories of type 3 (16 KiB, 512 blocks) are supported but untested here, due to a lack of tapes. The code paths for addresses above 255 blocks (READ BLOCK EXT) are in place.
+LTO-CM memories of type 3 (16 KiB) are supported and have been tested on an LTO-6 cartridge.
 
 LTO-CM memories of type 4 or later are not specified in ECMA-319; the tool will read up to the declared capacity, with a sanity limit of 32 KiB (1024 blocks). If you have a datasheet or specification for a later revision of LTO-CM memory chip, please contact me on the email address above. If you've successfully tested Type 3 or later memory device support, please open a PR.
 
