@@ -219,45 +219,76 @@ bool ltocm_readblkcnt(uint8_t *retReadBlk, int *retLenReadBlk)
 
 }
 
-/// Read one complete 32-byte LTO-CM block.
+/// Read the first 16 bytes of a block with READ BLOCK or READ BLOCK EXT.
 ///
-/// The first 16 bytes are fetched with READ BLOCK (or READ BLOCK EXT for
-/// addresses above 255), the second 16 with READ BLOCK CONTINUE. Each half
-/// carries its own CRC. Returns true only if both halves were read and
-/// verified.
-bool ltocm_read_block(size_t block, uint8_t *retBlock)
+/// Returns true only if the half was received, acknowledged and its CRC
+/// checked out.
+static bool ltocm_read_half(size_t block, bool use_ext, uint8_t *retHalf)
 {
 	uint8_t readBlk[18];
 	int lenReadBlk;
 	uint8_t crcBlock[2];
 
-	for (int half = 0; half < 2; half++) {
-		bool ok;
-		if (half == 0) {
-			if (block <= 0xFF) {
-				ok = ltocm_readblk(block, &readBlk[0], &lenReadBlk);
-			} else {
-				ok = ltocm_readblk_ext(block, &readBlk[0], &lenReadBlk);
-			}
-		} else {
-			ok = ltocm_readblkcnt(&readBlk[0], &lenReadBlk);
-		}
-
-		if (!ok)
+	if (use_ext) {
+		if (!ltocm_readblk_ext(block, &readBlk[0], &lenReadBlk))
 			return false;
-		if ((lenReadBlk == 1) && (readBlk[0] == LTOCM_NACK))
+	} else {
+		if (!ltocm_readblk(block, &readBlk[0], &lenReadBlk))
 			return false;
-		if (lenReadBlk != 18)
-			return false;
-
-		iso14443a_crc(readBlk, 16, crcBlock);
-		if (memcmp(&readBlk[16], crcBlock, 2) != 0)
-			return false;
-
-		memcpy(&retBlock[half * 16], readBlk, 16);
 	}
 
+	if ((lenReadBlk == 1) && (readBlk[0] == LTOCM_NACK))
+		return false;
+	if (lenReadBlk != 18)
+		return false;
+
+	iso14443a_crc(readBlk, 16, crcBlock);
+	if (memcmp(&readBlk[16], crcBlock, 2) != 0)
+		return false;
+
+	memcpy(retHalf, readBlk, 16);
 	return true;
+}
+
+/// Read the second 16 bytes of the current block with READ BLOCK CONTINUE.
+static bool ltocm_read_half_cont(uint8_t *retHalf)
+{
+	uint8_t readBlk[18];
+	int lenReadBlk;
+	uint8_t crcBlock[2];
+
+	if (!ltocm_readblkcnt(&readBlk[0], &lenReadBlk))
+		return false;
+
+	if ((lenReadBlk == 1) && (readBlk[0] == LTOCM_NACK))
+		return false;
+	if (lenReadBlk != 18)
+		return false;
+
+	iso14443a_crc(readBlk, 16, crcBlock);
+	if (memcmp(&readBlk[16], crcBlock, 2) != 0)
+		return false;
+
+	memcpy(retHalf, readBlk, 16);
+	return true;
+}
+
+/// Read one complete 32-byte LTO-CM block.
+///
+/// READ BLOCK carries a single-byte address, so it only covers blocks 0..254;
+/// the value 0xFF is rejected. Block 255 and above need READ BLOCK EXT. If
+/// the preferred form fails we retry with the other one, so the tool copes
+/// with chips that only implement one of them.
+bool ltocm_read_block(size_t block, uint8_t *retBlock)
+{
+	bool use_ext = (block >= 0xFF);
+
+	if (!ltocm_read_half(block, use_ext, &retBlock[0]) &&
+			!ltocm_read_half(block, !use_ext, &retBlock[0])) {
+		return false;
+	}
+
+	return ltocm_read_half_cont(&retBlock[16]);
 }
 
 int main(int argc, char **argv)
